@@ -1,6 +1,7 @@
 import YahooFinance from 'yahoo-finance2';
 import { SYMBOL_TO_YAHOO, feedService } from './src/services/feed.service.js';
 import { deltaService } from './src/services/delta.service.js';
+import { evaluateStockAnomaly, StockTick } from '@pulsemark/shared';
 
 async function runTestSuite() {
   console.log('🚀 Running PulseMark Comprehensive API & Market Test Suite...\n');
@@ -113,6 +114,68 @@ async function runTestSuite() {
   );
   console.log(`   ✓ Circuit Breaker Restored => Source: ${healthRestored.source}, Provider: ${healthRestored.provider}`);
   console.log('✅ [TEST 4 PASSED] Circuit breaker fallback and self-healing recovery verified.\n');
+
+  // ==========================================
+  // Test 5: Range Breach Anomaly Detection on Time Travel Baselines
+  // ==========================================
+  console.log('📈 [TEST 5] Verifying Range Breach Anomalies (Breakout & Breakdown) on Time Travel Baselines...');
+  const travelSnap = deltaService.simulateTimeTravel('test-user-audit', 120);
+  const infyBenchmark = travelSnap.prices['INFY'];
+  console.assert(infyBenchmark !== undefined, 'INFY benchmark not found in 2-hour simulated snapshot');
+
+  const baseInfyTick: StockTick = feedService.getKnownTick('INFY') || {
+    symbol: 'INFY',
+    name: 'Infosys Limited',
+    price: infyBenchmark.price,
+    change24h: 0,
+    change24hPercent: 0,
+    volume: 5000000,
+    avgVolume30d: 6800000,
+    volumeRatio: 1.0,
+    dayHigh: infyBenchmark.price,
+    dayLow: infyBenchmark.price,
+    week52High: 1250,
+    week52Low: 980,
+    openPrice: infyBenchmark.price,
+    prevClose: infyBenchmark.price,
+    vwap: infyBenchmark.price,
+    bidPrice: infyBenchmark.price - 0.5,
+    askPrice: infyBenchmark.price + 0.5,
+    spread: 1.0,
+    timestamp: new Date().toISOString(),
+    sparkline: [infyBenchmark.price],
+  };
+
+  // 1. Upward breakout: current price is 3% above baseline
+  const surgedPrice = Number((infyBenchmark.price * 1.03).toFixed(2));
+  const surgedInfyTick: StockTick = {
+    ...baseInfyTick,
+    price: surgedPrice,
+    dayHigh: surgedPrice,
+    change24hPercent: 3.0,
+  };
+  const surgedEval = evaluateStockAnomaly(surgedInfyTick, infyBenchmark);
+  console.assert(
+    surgedEval.reasons.some((r) => r.type === 'RESISTANCE_BREAKOUT'),
+    `Expected RESISTANCE_BREAKOUT when price surges +3% above 2-hour baseline (Price: ${surgedPrice}, DayHigh: ${infyBenchmark.dayHigh})`
+  );
+  console.log(`   ✓ Resistance Breakout verified => Price: ₹${surgedPrice} > Baseline High: ₹${infyBenchmark.dayHigh.toFixed(2)} (Score: ${surgedEval.anomalyScore})`);
+
+  // 2. Downward breakdown: current price is 3% below baseline
+  const breakdownPrice = Number((infyBenchmark.price * 0.97).toFixed(2));
+  const breakdownInfyTick: StockTick = {
+    ...baseInfyTick,
+    price: breakdownPrice,
+    dayLow: breakdownPrice,
+    change24hPercent: -3.0,
+  };
+  const breakdownEval = evaluateStockAnomaly(breakdownInfyTick, infyBenchmark);
+  console.assert(
+    breakdownEval.reasons.some((r) => r.type === 'SUPPORT_BREAK'),
+    `Expected SUPPORT_BREAK when price drops -3% below 2-hour baseline (Price: ${breakdownPrice}, DayLow: ${infyBenchmark.dayLow})`
+  );
+  console.log(`   ✓ Support Breakdown verified => Price: ₹${breakdownPrice} < Baseline Low: ₹${infyBenchmark.dayLow.toFixed(2)} (Score: ${breakdownEval.anomalyScore})`);
+  console.log('✅ [TEST 5 PASSED] Time travel baselines accurately detect resistance breakouts and support breakdowns.\n');
 
   console.log('🎉 =======================================================');
   console.log('🎉 ALL API & REAL MARKET DATA TESTS PASSED SUCCESSFULLY!  ');

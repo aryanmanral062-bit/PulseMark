@@ -187,9 +187,12 @@ export class DeltaCalculationService {
         benchmarkVolume = Math.max(100, Math.floor(tick.volume * 0.85));
       }
 
-      // Ensure dayHigh and dayLow bounds are realistic and anchored to live tick extremes
-      const dayHigh = tick.dayHigh > 0 ? Math.max(benchmarkPrice, tick.dayHigh) : benchmarkPrice * 1.01;
-      const dayLow = tick.dayLow > 0 ? Math.min(benchmarkPrice, tick.dayLow) : benchmarkPrice * 0.99;
+      // Baseline range as of T0:
+      // Derive baseline dayHigh and dayLow relative to benchmarkPrice and the time travel horizon
+      // so that future intraday price extremes (between T0 and T_now) do not leak into the historical baseline.
+      const rangeBand = benchmarkPrice * Math.max(0.005, 0.015 * Math.min(1, minutesAgo / 360));
+      const dayHigh = Number((benchmarkPrice + rangeBand).toFixed(2));
+      const dayLow = Number((benchmarkPrice - rangeBand).toFixed(2));
 
       prices[tick.symbol] = {
         price: benchmarkPrice,

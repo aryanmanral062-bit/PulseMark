@@ -301,10 +301,18 @@ export class FeedIngestionService {
   }
 
   public getAllKnownTicks(): StockTick[] {
-    if (this.lastKnownTicks.size > 0) {
-      return Array.from(this.lastKnownTicks.values());
+    const mockTicks = mockStockService.getAllTicks();
+    if (this.lastKnownTicks.size === 0) {
+      return mockTicks;
     }
-    return mockStockService.getAllTicks();
+    const map = new Map<string, StockTick>();
+    for (const tick of mockTicks) {
+      map.set(tick.symbol, tick);
+    }
+    for (const [sym, tick] of this.lastKnownTicks.entries()) {
+      map.set(sym, tick);
+    }
+    return Array.from(map.values());
   }
 
   private async saveToCache(ticks: StockTick[]): Promise<void> {
